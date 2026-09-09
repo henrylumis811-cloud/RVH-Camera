@@ -1,0 +1,76 @@
+name: RVH Camera — BUILD 002 DIAGNOSTIC
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build RVH Camera
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout RVH Camera
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Provision exact Android SDK toolchain
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Set up Gradle 9.6.0
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Generate Gradle wrapper
+        run: |
+          gradle wrapper \
+            --gradle-version 9.6.0 \
+            --distribution-type bin
+
+      - name: Verify build provenance
+        run: |
+          chmod +x ./gradlew
+          echo '--- Java ---'
+          java -version
+          echo '--- Gradle ---'
+          ./gradlew --version
+          echo '--- Android SDK ---'
+          sdkmanager --list_installed | sed -n '1,120p'
+          echo '--- Project properties ---'
+          ./gradlew :app:properties --no-daemon | sed -n '1,220p'
+
+      - name: Assemble debug APK
+        run: |
+          ./gradlew \
+            --no-daemon \
+            --stacktrace \
+            assembleDebug
+
+      - name: Upload RVH Camera APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: rvh-camera-build-002-diagnostic-debug
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
